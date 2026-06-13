@@ -26,20 +26,25 @@ port-manager/
 │   └── Cargo.toml              # 依赖：netstat2、sysinfo、serde
 ├── src/
 │   ├── components/
-│   │   ├── PortTable.tsx       # 端口列表表格（shadcn Table）
-│   │   ├── KillDialog.tsx      # Kill 确认弹窗（shadcn AlertDialog）
-│   │   └── RefreshBar.tsx      # 自动刷新开关 + 手动刷新按钮
+│   │   ├── PortTable.tsx       # 端口列表（路径列 + PID 树形分组）
+│   │   ├── KillDialog.tsx      # Kill 确认弹窗
+│   │   ├── RefreshBar.tsx      # 自动刷新开关 + 手动刷新按钮
+│   │   └── SearchBar.tsx       # 搜索框（端口/进程名/路径）
 │   ├── hooks/
 │   │   └── usePorts.ts         # TanStack Query 轮询 hook
+│   ├── lib/
+│   │   ├── filterPorts.ts      # 搜索过滤纯函数
+│   │   ├── groupPorts.ts       # 按 PID 分组纯函数
+│   │   └── utils.ts            # shadcn cn 工具
 │   ├── types/
-│   │   └── port.ts             # PortEntry 接口定义
-│   ├── test/
-│   │   ├── PortTable.test.tsx  # vitest 组件测试
-│   │   └── setup.ts            # @testing-library/jest-dom 初始化
-│   ├── App.tsx                 # 根组件：布局、状态、kill 逻辑
+│   │   └── port.ts             # PortEntry 接口（含 exePath、isUserProcess）
+│   ├── test/                   # vitest 测试
+│   ├── App.tsx                 # 根组件：搜索 + 过滤 + 分组 + kill
 │   └── main.tsx                # QueryClientProvider 入口
 └── CLAUDE.md                   # 本文件
 ```
+
+v2 增强：端口搜索、可执行路径列、用户进程优先排序、同 PID 多端口树形聚合、IPv4/IPv6 去重。
 
 ### 数据流
 
