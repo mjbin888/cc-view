@@ -57,8 +57,8 @@ pub fn get_ports_internal() -> Result<Vec<PortEntry>, String> {
 
     // LISTEN first, then by port number
     entries.sort_by(|a, b| {
-        let a_listen = a.state == "LISTEN";
-        let b_listen = b.state == "LISTEN";
+        let a_listen = a.state.starts_with("LISTEN");
+        let b_listen = b.state.starts_with("LISTEN");
         b_listen.cmp(&a_listen).then(a.port.cmp(&b.port))
     });
 

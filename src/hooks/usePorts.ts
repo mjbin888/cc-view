@@ -4,10 +4,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { PortEntry } from "../types/port";
 
 export function usePorts(autoRefresh: boolean) {
-  return useQuery<PortEntry[]>({
+  return useQuery<PortEntry[], Error>({
     queryKey: ["ports"],
     queryFn: () => invoke<PortEntry[]>("list_ports"),
     refetchInterval: autoRefresh ? 3000 : false,
     staleTime: 0,
+    retry: 0,
   });
 }

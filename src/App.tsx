@@ -14,16 +14,16 @@ export default function App() {
   const [pendingKill, setPendingKill] = useState<PortEntry | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: ports = [], isFetching } = usePorts(autoRefresh);
+  const { data: ports = [], isFetching, isError } = usePorts(autoRefresh);
 
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ["ports"] });
   }
 
   async function handleKillConfirm(entry: PortEntry) {
-    setPendingKill(null);
     try {
       await invoke("kill_port", { pid: entry.pid });
+      setPendingKill(null);
       toast.success(`已 Kill ${entry.processName} (PID ${entry.pid})`);
       handleRefresh();
     } catch (err) {
@@ -43,6 +43,11 @@ export default function App() {
             isLoading={isFetching}
           />
         </div>
+        {isError && (
+          <div className="mb-4 rounded-md border border-destructive bg-destructive/10 px-4 py-2 text-sm text-destructive">
+            无法获取端口列表，请检查应用权限
+          </div>
+        )}
         <div className="rounded-lg border">
           <PortTable entries={ports} onKill={setPendingKill} />
         </div>
