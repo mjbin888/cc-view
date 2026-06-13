@@ -4,5 +4,7 @@ export interface PortEntry {
   protocol: "TCP" | "UDP";
   pid: number;
   processName: string;
+  exePath: string;
+  isUserProcess: boolean;
   state: string;
 }
