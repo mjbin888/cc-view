@@ -173,10 +173,13 @@ mod tests {
 
     #[test]
     fn test_entries_carry_new_fields() {
+        // Field access proves the struct shape; the assert proves the pipeline
+        // actually populated each entry rather than returning empties.
         let entries = get_ports_internal().unwrap();
         for e in &entries {
             let _ = &e.exe_path;
             let _ = e.is_user_process;
+            assert!(!e.process_name.is_empty(), "process_name should never be empty");
         }
     }
 
