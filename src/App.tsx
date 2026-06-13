@@ -1,53 +1,59 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import "./App.css";
+import { useQueryClient } from "@tanstack/react-query";
+import { usePorts } from "./hooks/usePorts";
+import { PortTable } from "./components/PortTable";
+import { RefreshBar } from "./components/RefreshBar";
+import { KillDialog } from "./components/KillDialog";
+import { PortEntry } from "./types/port";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+export default function App() {
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [pendingKill, setPendingKill] = useState<PortEntry | null>(null);
+  const queryClient = useQueryClient();
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  const { data: ports = [], isFetching } = usePorts(autoRefresh);
+
+  function handleRefresh() {
+    queryClient.invalidateQueries({ queryKey: ["ports"] });
+  }
+
+  async function handleKillConfirm(entry: PortEntry) {
+    setPendingKill(null);
+    try {
+      await invoke("kill_port", { pid: entry.pid });
+      toast.success(`已 Kill ${entry.processName} (PID ${entry.pid})`);
+      handleRefresh();
+    } catch (err) {
+      toast.error(`Kill 失败: ${err}`);
+    }
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Port Manager</h1>
+          <RefreshBar
+            autoRefresh={autoRefresh}
+            onAutoRefreshChange={setAutoRefresh}
+            onRefresh={handleRefresh}
+            isLoading={isFetching}
+          />
+        </div>
+        <div className="rounded-lg border">
+          <PortTable entries={ports} onKill={setPendingKill} />
+        </div>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+      <KillDialog
+        entry={pendingKill}
+        onConfirm={handleKillConfirm}
+        onCancel={() => setPendingKill(null)}
+      />
       <Toaster />
-    </main>
+    </div>
   );
 }
-
-export default App;
