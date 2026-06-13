@@ -31,7 +31,7 @@ pub fn get_ports_internal() -> Result<Vec<PortEntry>, String> {
                     format!("{}", tcp.state),
                 ),
                 ProtocolSocketInfo::Udp(udp) => {
-                    (udp.local_port, "UDP".to_string(), "".to_string())
+                    (udp.local_port, "UDP".to_string(), "N/A".to_string())
                 }
             };
 
@@ -42,7 +42,7 @@ pub fn get_ports_internal() -> Result<Vec<PortEntry>, String> {
 
             let process_name = sys
                 .process(Pid::from_u32(pid))
-                .map(|p| p.name().to_string_lossy().to_string())
+                .map(|p| p.name().to_string_lossy().into_owned())
                 .unwrap_or_else(|| "unknown".to_string());
 
             Some(PortEntry {
@@ -57,8 +57,8 @@ pub fn get_ports_internal() -> Result<Vec<PortEntry>, String> {
 
     // LISTEN first, then by port number
     entries.sort_by(|a, b| {
-        let a_listen = a.state.contains("LISTEN");
-        let b_listen = b.state.contains("LISTEN");
+        let a_listen = a.state == "LISTEN";
+        let b_listen = b.state == "LISTEN";
         b_listen.cmp(&a_listen).then(a.port.cmp(&b.port))
     });
 
@@ -77,8 +77,11 @@ pub fn kill_port_internal(pid: u32) -> Result<(), String> {
     let sys = System::new_all();
     match sys.process(Pid::from_u32(pid)) {
         Some(process) => {
-            process.kill();
-            Ok(())
+            if process.kill() {
+                Ok(())
+            } else {
+                Err(format!("Failed to kill process {}", pid))
+            }
         }
         None => Err(format!("Process {} not found", pid)),
     }
