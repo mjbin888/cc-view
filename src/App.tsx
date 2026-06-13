@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -7,16 +7,26 @@ import { usePorts } from "./hooks/usePorts";
 import { PortTable } from "./components/PortTable";
 import { RefreshBar } from "./components/RefreshBar";
 import { KillDialog } from "./components/KillDialog";
-import { PortEntry } from "./types/port";
+import { SearchBar } from "./components/SearchBar";
+import { filterPorts } from "./lib/filterPorts";
 import { groupPorts } from "./lib/groupPorts";
+import { PortEntry } from "./types/port";
 
 export default function App() {
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [query, setQuery] = useState("");
   const [pendingKill, setPendingKill] = useState<PortEntry | null>(null);
   const queryClient = useQueryClient();
 
   const { data: ports = [], isFetching, isError } = usePorts(autoRefresh);
-  const groups = groupPorts(ports);
+
+  const groups = useMemo(
+    () => groupPorts(filterPorts(ports, query)),
+    [ports, query]
+  );
+
+  const emptyMessage =
+    query.trim() && ports.length > 0 ? "无匹配结果" : "未发现监听端口";
 
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ["ports"] });
@@ -35,7 +45,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-5xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Port Manager</h1>
           <RefreshBar
@@ -45,13 +55,14 @@ export default function App() {
             isLoading={isFetching}
           />
         </div>
+        <SearchBar query={query} onQueryChange={setQuery} />
         {isError && (
           <div className="mb-4 rounded-md border border-destructive bg-destructive/10 px-4 py-2 text-sm text-destructive">
             无法获取端口列表，请检查应用权限
           </div>
         )}
         <div className="rounded-lg border">
-          <PortTable groups={groups} onKill={setPendingKill} />
+          <PortTable groups={groups} onKill={setPendingKill} emptyMessage={emptyMessage} />
         </div>
       </div>
 
