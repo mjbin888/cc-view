@@ -8,6 +8,7 @@ import { PortTable } from "./components/PortTable";
 import { RefreshBar } from "./components/RefreshBar";
 import { KillDialog } from "./components/KillDialog";
 import { PortEntry } from "./types/port";
+import { groupPorts } from "./lib/groupPorts";
 
 export default function App() {
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -15,6 +16,7 @@ export default function App() {
   const queryClient = useQueryClient();
 
   const { data: ports = [], isFetching, isError } = usePorts(autoRefresh);
+  const groups = groupPorts(ports);
 
   function handleRefresh() {
     queryClient.invalidateQueries({ queryKey: ["ports"] });
@@ -49,7 +51,7 @@ export default function App() {
           </div>
         )}
         <div className="rounded-lg border">
-          <PortTable entries={ports} onKill={setPendingKill} />
+          <PortTable groups={groups} onKill={setPendingKill} />
         </div>
       </div>
 

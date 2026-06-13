@@ -2,33 +2,78 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PortTable } from "../components/PortTable";
-import { PortEntry } from "../types/port";
+import { PortGroup } from "../lib/groupPorts";
 
-const mockEntries: PortEntry[] = [
-  { port: 3000, protocol: "TCP", pid: 1234, processName: "node", state: "LISTEN" },
-  { port: 5432, protocol: "TCP", pid: 5678, processName: "postgres", state: "LISTEN" },
-];
+const singlePortGroup: PortGroup = {
+  pid: 42,
+  processName: "node",
+  exePath: "/usr/bin/node",
+  isUserProcess: true,
+  entries: [
+    { port: 3000, protocol: "TCP", pid: 42, processName: "node", exePath: "/usr/bin/node", isUserProcess: true, state: "LISTEN" },
+  ],
+};
+
+const multiPortGroup: PortGroup = {
+  pid: 1229,
+  processName: "ControlCenter",
+  exePath: "/System/CC",
+  isUserProcess: false,
+  entries: [
+    { port: 5000, protocol: "TCP", pid: 1229, processName: "ControlCenter", exePath: "/System/CC", isUserProcess: false, state: "LISTEN" },
+    { port: 7000, protocol: "TCP", pid: 1229, processName: "ControlCenter", exePath: "/System/CC", isUserProcess: false, state: "LISTEN" },
+  ],
+};
 
 describe("PortTable", () => {
-  it("renders port entries", () => {
-    render(<PortTable entries={mockEntries} onKill={vi.fn()} />);
+  it("renders a single-port group as a normal row with path", () => {
+    render(<PortTable groups={[singlePortGroup]} onKill={vi.fn()} />);
     expect(screen.getByText("3000")).toBeInTheDocument();
     expect(screen.getByText("node")).toBeInTheDocument();
-    expect(screen.getByText("5432")).toBeInTheDocument();
-    expect(screen.getByText("postgres")).toBeInTheDocument();
+    expect(screen.getByText("/usr/bin/node")).toBeInTheDocument();
   });
 
-  it("shows empty state when no entries", () => {
-    render(<PortTable entries={[]} onKill={vi.fn()} />);
+  it("shows default empty state when no groups", () => {
+    render(<PortTable groups={[]} onKill={vi.fn()} />);
     expect(screen.getByText("未发现监听端口")).toBeInTheDocument();
   });
 
-  it("calls onKill with entry when Kill button clicked", async () => {
+  it("shows custom empty message when provided", () => {
+    render(<PortTable groups={[]} onKill={vi.fn()} emptyMessage="无匹配结果" />);
+    expect(screen.getByText("无匹配结果")).toBeInTheDocument();
+  });
+
+  it("calls onKill with the entry when a single-port Kill is clicked", async () => {
     const onKill = vi.fn();
     const user = userEvent.setup();
-    render(<PortTable entries={mockEntries} onKill={onKill} />);
+    render(<PortTable groups={[singlePortGroup]} onKill={onKill} />);
+    await user.click(screen.getByText("Kill"));
+    expect(onKill).toHaveBeenCalledWith(singlePortGroup.entries[0]);
+  });
+
+  it("renders multi-port group child rows expanded by default", () => {
+    render(<PortTable groups={[multiPortGroup]} onKill={vi.fn()} />);
+    expect(screen.getByText("5000")).toBeInTheDocument();
+    expect(screen.getByText("7000")).toBeInTheDocument();
+    expect(screen.getByText("2 个端口")).toBeInTheDocument();
+  });
+
+  it("collapses and expands a multi-port group on header click", async () => {
+    const user = userEvent.setup();
+    render(<PortTable groups={[multiPortGroup]} onKill={vi.fn()} />);
+    expect(screen.getByText("5000")).toBeInTheDocument();
+    await user.click(screen.getByText("2 个端口"));
+    expect(screen.queryByText("5000")).not.toBeInTheDocument();
+    await user.click(screen.getByText("2 个端口"));
+    expect(screen.getByText("5000")).toBeInTheDocument();
+  });
+
+  it("calls onKill with the correct child entry from a multi-port group", async () => {
+    const onKill = vi.fn();
+    const user = userEvent.setup();
+    render(<PortTable groups={[multiPortGroup]} onKill={onKill} />);
     const killButtons = screen.getAllByText("Kill");
     await user.click(killButtons[0]);
-    expect(onKill).toHaveBeenCalledWith(mockEntries[0]);
+    expect(onKill).toHaveBeenCalledWith(multiPortGroup.entries[0]);
   });
 });
