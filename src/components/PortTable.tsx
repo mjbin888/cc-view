@@ -109,7 +109,15 @@ export function PortTable({ groups, onKill, emptyMessage }: PortTableProps) {
             <Fragment key={`frag-${group.pid}`}>
               <TableRow
                 className="cursor-pointer bg-muted/30 hover:bg-muted/50"
+                role="button"
+                tabIndex={0}
                 onClick={() => toggle(group.pid)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggle(group.pid);
+                  }
+                }}
               >
                 <TableCell colSpan={2}>
                   <div className="flex items-center gap-1 font-medium">
