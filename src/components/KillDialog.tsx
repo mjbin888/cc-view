@@ -36,6 +36,7 @@ export function KillDialog({ entry, onConfirm, onCancel }: KillDialogProps) {
           <AlertDialogCancel onClick={onCancel}>取消</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            disabled={!entry}
             onClick={() => entry && onConfirm(entry)}
           >
             Kill
