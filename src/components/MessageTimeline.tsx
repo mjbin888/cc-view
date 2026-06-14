@@ -77,8 +77,8 @@ export function MessageTimeline({ events }: { events: NormEvent[] }) {
   }
   return (
     <div className="space-y-3">
-      {events.map((e) => (
-        <EventCard key={e.uuid} event={e} />
+      {events.map((e, i) => (
+        <EventCard key={e.uuid || i} event={e} />
       ))}
     </div>
   );
