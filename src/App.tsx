@@ -10,7 +10,7 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <AppSidebar view={view} onChange={setView} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 min-h-0 overflow-auto">
         {view === "ports" ? <PortsView /> : <ConversationsView />}
       </main>
       <Toaster />

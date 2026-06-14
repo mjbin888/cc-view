@@ -12,7 +12,7 @@ export function ConversationsView() {
   const { data: detail, isLoading } = useSession(selectedId);
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-full">
       <div className="w-80 border-r">
         {isError ? (
           <div className="p-6 text-center text-destructive text-sm">无法读取会话目录</div>
