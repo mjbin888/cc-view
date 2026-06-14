@@ -26,11 +26,12 @@ describe("MessageTimeline", () => {
     expect(screen.getByText(/Bash/)).toBeInTheDocument();
   });
 
-  it("toggles raw view for an event", () => {
+  it("toggles raw view showing a json tree with toolbar", () => {
     render(<MessageTimeline events={events} />);
-    expect(screen.queryByText(/"a":1/)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("搜索 JSON…")).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /raw/i })[0]);
-    expect(screen.getByText(/"a":1/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("搜索 JSON…")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
   });
 
   it("renders empty state", () => {

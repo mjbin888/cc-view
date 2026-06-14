@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Block, NormEvent } from "../types/conversation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { JsonTree } from "./JsonTree";
+import { JsonViewer } from "./JsonViewer";
 
 function BlockView({ block }: { block: Block }) {
   switch (block.kind) {
@@ -21,25 +23,41 @@ function BlockView({ block }: { block: Block }) {
           <summary className="cursor-pointer select-none">
             🔧 tool_use: <span className="font-mono">{block.name}</span>
           </summary>
-          <pre className="mt-1 overflow-auto rounded bg-muted p-2 text-xs">
-            {JSON.stringify(block.input, null, 2)}
-          </pre>
+          <div className="mt-1 rounded bg-muted p-2">
+            <JsonTree data={block.input} />
+          </div>
         </details>
       );
     case "tool_result":
       return (
         <details className="text-sm">
           <summary className="cursor-pointer select-none">📤 tool_result</summary>
-          <pre className="mt-1 overflow-auto rounded bg-muted p-2 text-xs">
-            {typeof block.content === "string"
-              ? block.content
-              : JSON.stringify(block.content, null, 2)}
-          </pre>
+          <div className="mt-1 rounded bg-muted p-2">
+            {typeof block.content === "string" ? (
+              <pre className="whitespace-pre-wrap break-all text-xs">{block.content}</pre>
+            ) : (
+              <JsonTree data={block.content} />
+            )}
+          </div>
         </details>
       );
     case "image":
       return <p className="text-sm text-muted-foreground">🖼️ image</p>;
   }
+}
+
+function RawPanel({ raw }: { raw: string }) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return (
+      <pre className="overflow-auto rounded bg-muted p-2 text-xs whitespace-pre-wrap break-all">
+        {raw}
+      </pre>
+    );
+  }
+  return <JsonViewer data={parsed} />;
 }
 
 function EventCard({ event }: { event: NormEvent }) {
@@ -59,7 +77,7 @@ function EventCard({ event }: { event: NormEvent }) {
         </Button>
       </div>
       {raw ? (
-        <pre className="overflow-auto rounded bg-muted p-2 text-xs">{event.raw}</pre>
+        <RawPanel raw={event.raw} />
       ) : (
         <div className="space-y-2">
           {event.blocks.map((b, i) => (
