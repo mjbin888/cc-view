@@ -40,9 +40,9 @@ export function PortsView() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="w-full p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Port Manager</h1>
+        <h1 className="text-2xl font-bold">本地端口管理</h1>
         <RefreshBar
           autoRefresh={autoRefresh}
           onAutoRefreshChange={setAutoRefresh}
@@ -56,7 +56,7 @@ export function PortsView() {
           无法获取端口列表，请检查应用权限
         </div>
       )}
-      <div className="rounded-lg border">
+      <div className="rounded-lg border overflow-x-auto">
         <PortTable groups={groups} onKill={setPendingKill} emptyMessage={emptyMessage} />
       </div>
 
