@@ -21,30 +21,50 @@ port-manager/
 ├── src-tauri/
 │   ├── src/
 │   │   ├── commands/
-│   │   │   └── ports.rs        # list_ports、kill_port Tauri 命令 + 单元测试
-│   │   └── lib.rs              # 注册 Tauri 命令
-│   └── Cargo.toml              # 依赖：netstat2、sysinfo、serde
+│   │   │   ├── ports.rs           # list_ports、kill_port Tauri 命令 + 单元测试
+│   │   │   └── conversations.rs   # list_sessions、read_session Tauri 命令 + JSONL 解析 + 单元测试
+│   │   └── lib.rs                 # 注册 Tauri 命令
+│   └── Cargo.toml                 # 依赖：netstat2、sysinfo、serde、serde_json、dirs
 ├── src/
+│   ├── views/
+│   │   ├── PortsView.tsx          # 端口视图
+│   │   └── ConversationsView.tsx  # 会话查看器视图，主从布局
 │   ├── components/
-│   │   ├── PortTable.tsx       # 端口列表（路径列 + PID 树形分组）
-│   │   ├── KillDialog.tsx      # Kill 确认弹窗
-│   │   ├── RefreshBar.tsx      # 自动刷新开关 + 手动刷新按钮
-│   │   └── SearchBar.tsx       # 搜索框（端口/进程名/路径）
+│   │   ├── AppSidebar.tsx         # 端口/会话 sidebar 导航
+│   │   ├── PortTable.tsx          # 端口列表（路径列 + PID 树形分组）
+│   │   ├── KillDialog.tsx         # Kill 确认弹窗
+│   │   ├── RefreshBar.tsx         # 自动刷新开关 + 手动刷新按钮
+│   │   ├── SearchBar.tsx          # 搜索框（端口/进程名/路径）
+│   │   ├── SessionList.tsx        # 会话列表，按项目分组
+│   │   ├── SessionDetail.tsx      # 会话详情
+│   │   ├── MessageTimeline.tsx    # 消息时间线，thinking/工具折叠 + Pretty/Raw 切换
+│   │   └── TokenStats.tsx         # token 统计
 │   ├── hooks/
-│   │   └── usePorts.ts         # TanStack Query 轮询 hook
+│   │   ├── usePorts.ts            # TanStack Query 轮询 hook
+│   │   ├── useSessions.ts         # 会话列表轮询
+│   │   └── useSession.ts          # 选中会话轮询
 │   ├── lib/
-│   │   ├── filterPorts.ts      # 搜索过滤纯函数
-│   │   ├── groupPorts.ts       # 按 PID 分组纯函数
-│   │   └── utils.ts            # shadcn cn 工具
+│   │   ├── filterPorts.ts         # 搜索过滤纯函数（含 cwd/cmd 字段）
+│   │   ├── formatDuration.ts      # 运行时长格式化（45s / 12m / 2h 15m / 3d 4h）
+│   │   ├── groupPorts.ts          # 按 PID 分组纯函数
+│   │   ├── utils.ts               # shadcn cn 工具
+│   │   ├── aggregateUsage.ts      # token 聚合
+│   │   ├── groupSessionsByProject.ts  # 按项目分组
+│   │   └── filterSessions.ts      # 会话搜索过滤
 │   ├── types/
-│   │   └── port.ts             # PortEntry 接口（含 exePath、isUserProcess）
-│   ├── test/                   # vitest 测试
-│   ├── App.tsx                 # 根组件：搜索 + 过滤 + 分组 + kill
-│   └── main.tsx                # QueryClientProvider 入口
-└── CLAUDE.md                   # 本文件
+│   │   ├── port.ts                # PortEntry 接口（含 cwd、cmd、runTimeSecs）
+│   │   └── conversation.ts        # 会话/事件/Block 类型
+│   ├── test/                      # vitest 测试
+│   ├── App.tsx                    # layout shell：sidebar + 视图切换
+│   └── main.tsx                   # QueryClientProvider 入口
+└── CLAUDE.md                      # 本文件
 ```
 
 v2 增强：端口搜索、可执行路径列、用户进程优先排序、同 PID 多端口树形聚合、IPv4/IPv6 去重。
+
+v3 增强：路径列改为工作目录（cwd），cmd 作为 tooltip；新增运行时长列（runTimeSecs）；搜索范围覆盖 cwd/cmd。
+
+v4 增强：新增「会话查看器」视图（sidebar 切换 端口/会话）；读取本地 Claude Code 会话（~/.claude/projects/*/*.jsonl），归一化为消息时间线；支持 thinking/工具调用折叠、Pretty/Raw 原始 payload 切换、token 统计（含按 model 分组）；轮询自动刷新（5s）；后端 TranscriptSource trait 预留 Codex/OpenCode 接入。
 
 ### 数据流
 
@@ -62,11 +82,23 @@ KillDialog 确认 → invoke kill_port(pid)
 Toast 提示 → 刷新列表
 ```
 
+```
+Rust list_sessions (扫 ~/.claude/projects/*/*.jsonl)
+      ↓
+useSessions (TanStack Query, 5s 轮询)
+      ↓
+SessionList (按项目分组 + 搜索) → 选中会话
+      ↓
+useSession(id) → Rust read_session (JSONL 逐行 → 归一化 NormEvent)
+      ↓
+SessionDetail → TokenStats + MessageTimeline (Pretty/Raw 切换)
+```
+
 ### 核心依赖
 
 | 层级 | 依赖 |
 |------|------|
-| Rust | netstat2 0.2, sysinfo 0.30, serde 1 |
+| Rust | netstat2 0.11, sysinfo 0.39, serde 1, serde_json, dirs |
 | 前端框架 | React 19, TypeScript, Vite 7 |
 | UI | TailwindCSS, shadcn/ui, lucide-react |
 | 状态 | TanStack Query v5 |
