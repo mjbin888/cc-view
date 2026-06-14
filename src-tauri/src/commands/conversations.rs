@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::Path;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "kind")]
@@ -143,6 +144,81 @@ pub fn parse_event(line: &str) -> Option<NormEvent> {
     })
 }
 
+/// 取首条"真实" user 文本作为标题：跳过以 '<' 开头的命令包装内容；截断 80 字符。
+fn derive_title(events: &[NormEvent]) -> String {
+    for ev in events {
+        if ev.role != "user" {
+            continue;
+        }
+        for b in &ev.blocks {
+            if let Block::Text { text } = b {
+                let t = text.trim();
+                if !t.is_empty() && !t.starts_with('<') {
+                    return t.chars().take(80).collect();
+                }
+            }
+        }
+    }
+    "(无标题)".to_string()
+}
+
+/// 从原始行里取首个出现的 cwd（NormEvent 不含 cwd）。
+fn derive_project_path(lines: &[&str]) -> String {
+    for line in lines {
+        if let Ok(v) = serde_json::from_str::<Value>(line) {
+            if let Some(cwd) = v.get("cwd").and_then(|x| x.as_str()) {
+                return cwd.to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+pub fn read_session_file(path: &Path) -> Result<SessionDetail, String> {
+    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let lines: Vec<&str> = content.lines().collect();
+    let events: Vec<NormEvent> = lines.iter().filter_map(|l| parse_event(l)).collect();
+
+    let session_id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let mut total_input = 0u64;
+    let mut total_output = 0u64;
+    let mut models: Vec<String> = Vec::new();
+    for ev in &events {
+        if let Some(u) = &ev.usage {
+            total_input += u.input_tokens;
+            total_output += u.output_tokens;
+        }
+        if let Some(m) = &ev.model {
+            if !models.contains(m) {
+                models.push(m.clone());
+            }
+        }
+    }
+
+    let started_at = events.first().map(|e| e.timestamp.clone()).unwrap_or_default();
+    let last_activity_at = events.last().map(|e| e.timestamp.clone()).unwrap_or_default();
+
+    let summary = SessionSummary {
+        id: format!("claude-code:{}", session_id),
+        source: "claude-code".to_string(),
+        project_path: derive_project_path(&lines),
+        title: derive_title(&events),
+        message_count: events.len(),
+        started_at,
+        last_activity_at,
+        total_input_tokens: total_input,
+        total_output_tokens: total_output,
+        models,
+    };
+
+    Ok(SessionDetail { summary, events })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,5 +254,43 @@ mod tests {
         let line = r#"{"type":"file-history-snapshot","messageId":"m"}"#;
         assert!(parse_event(line).is_none());
         assert!(parse_event("not json").is_none());
+    }
+
+    fn write_fixture(dir: &std::path::Path, name: &str, lines: &[&str]) -> std::path::PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, lines.join("\n")).unwrap();
+        p
+    }
+
+    #[test]
+    fn read_session_file_normalizes_and_summarizes() {
+        let tmp = std::env::temp_dir().join("conv_test_read");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let path = write_fixture(
+            &tmp,
+            "sess-abc.jsonl",
+            &[
+                r#"{"type":"mode","sessionId":"sess-abc"}"#,
+                r#"{"type":"user","uuid":"u1","cwd":"/Users/me/proj","timestamp":"2026-06-14T00:00:00Z","message":{"role":"user","content":"<local-command-caveat>skip me"}}"#,
+                r#"{"type":"user","uuid":"u2","cwd":"/Users/me/proj","timestamp":"2026-06-14T00:00:01Z","message":{"role":"user","content":"real first prompt"}}"#,
+                "broken json line",
+                r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-14T00:00:02Z","message":{"role":"assistant","model":"claude-sonnet-4-6","content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":10,"output_tokens":20,"cache_creation_input_tokens":0,"cache_read_input_tokens":5}}}"#,
+            ],
+        );
+
+        let d = read_session_file(&path).expect("read ok");
+        assert_eq!(d.events.len(), 3); // 2 user + 1 assistant，跳过 mode 与损坏行
+        assert_eq!(d.summary.id, "claude-code:sess-abc");
+        assert_eq!(d.summary.source, "claude-code");
+        assert_eq!(d.summary.project_path, "/Users/me/proj");
+        assert_eq!(d.summary.title, "real first prompt"); // 跳过 <local-command 包装
+        assert_eq!(d.summary.message_count, 3);
+        assert_eq!(d.summary.started_at, "2026-06-14T00:00:00Z");
+        assert_eq!(d.summary.last_activity_at, "2026-06-14T00:00:02Z");
+        assert_eq!(d.summary.total_input_tokens, 10);
+        assert_eq!(d.summary.total_output_tokens, 20);
+        assert_eq!(d.summary.models, vec!["claude-sonnet-4-6".to_string()]);
+
+        std::fs::remove_dir_all(&tmp).ok();
     }
 }
