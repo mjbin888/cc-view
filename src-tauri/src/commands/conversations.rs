@@ -219,6 +219,97 @@ pub fn read_session_file(path: &Path) -> Result<SessionDetail, String> {
     Ok(SessionDetail { summary, events })
 }
 
+/// 轻量摘要：解析行以取 title / startedAt / projectPath，token 留 0（详见 spec §5）。
+pub fn summarize_session_file(path: &Path) -> Result<SessionSummary, String> {
+    let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let lines: Vec<&str> = content.lines().collect();
+    let events: Vec<NormEvent> = lines.iter().filter_map(|l| parse_event(l)).collect();
+    let session_id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let started_at = events.first().map(|e| e.timestamp.clone()).unwrap_or_default();
+    let last_activity_at = events.last().map(|e| e.timestamp.clone()).unwrap_or_default();
+    Ok(SessionSummary {
+        id: format!("claude-code:{}", session_id),
+        source: "claude-code".to_string(),
+        project_path: derive_project_path(&lines),
+        title: derive_title(&events),
+        message_count: events.len(),
+        started_at,
+        last_activity_at,
+        total_input_tokens: 0,
+        total_output_tokens: 0,
+        models: Vec::new(),
+    })
+}
+
+pub trait TranscriptSource {
+    fn list_sessions(&self) -> Result<Vec<SessionSummary>, String>;
+    fn read_session(&self, id: &str) -> Result<SessionDetail, String>;
+}
+
+pub struct ClaudeCodeSource;
+
+impl ClaudeCodeSource {
+    fn root() -> Option<std::path::PathBuf> {
+        dirs::home_dir().map(|h| h.join(".claude").join("projects"))
+    }
+}
+
+impl TranscriptSource for ClaudeCodeSource {
+    fn list_sessions(&self) -> Result<Vec<SessionSummary>, String> {
+        let root = match Self::root() {
+            Some(r) if r.is_dir() => r,
+            _ => return Ok(Vec::new()), // 目录不存在 → 空列表，非错误
+        };
+        let mut out = Vec::new();
+        for proj in std::fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
+            let pdir = proj.path();
+            if !pdir.is_dir() {
+                continue;
+            }
+            for f in std::fs::read_dir(&pdir).map_err(|e| e.to_string())?.flatten() {
+                let fp = f.path();
+                if fp.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+                    if let Ok(s) = summarize_session_file(&fp) {
+                        out.push(s);
+                    }
+                }
+            }
+        }
+        // 最近活跃在前
+        out.sort_by(|a, b| b.last_activity_at.cmp(&a.last_activity_at));
+        Ok(out)
+    }
+
+    fn read_session(&self, id: &str) -> Result<SessionDetail, String> {
+        let session_id = id.strip_prefix("claude-code:").unwrap_or(id);
+        let root = Self::root().ok_or_else(|| "no home dir".to_string())?;
+        if !root.is_dir() {
+            return Err(format!("session not found: {}", id));
+        }
+        for proj in std::fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
+            let candidate = proj.path().join(format!("{}.jsonl", session_id));
+            if candidate.is_file() {
+                return read_session_file(&candidate);
+            }
+        }
+        Err(format!("session not found: {}", id))
+    }
+}
+
+#[tauri::command]
+pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
+    ClaudeCodeSource.list_sessions()
+}
+
+#[tauri::command]
+pub fn read_session(id: String) -> Result<SessionDetail, String> {
+    ClaudeCodeSource.read_session(&id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,6 +351,29 @@ mod tests {
         let p = dir.join(name);
         std::fs::write(&p, lines.join("\n")).unwrap();
         p
+    }
+
+    #[test]
+    fn summarize_session_file_is_lightweight() {
+        let tmp = std::env::temp_dir().join("conv_test_sum");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let path = write_fixture(
+            &tmp,
+            "sess-xyz.jsonl",
+            &[
+                r#"{"type":"user","uuid":"u1","cwd":"/Users/me/p2","timestamp":"2026-06-14T01:00:00Z","message":{"role":"user","content":"hello there"}}"#,
+                r#"{"type":"assistant","uuid":"a1","timestamp":"2026-06-14T01:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}"#,
+            ],
+        );
+        let s = summarize_session_file(&path).expect("summary ok");
+        assert_eq!(s.id, "claude-code:sess-xyz");
+        assert_eq!(s.project_path, "/Users/me/p2");
+        assert_eq!(s.title, "hello there");
+        assert_eq!(s.started_at, "2026-06-14T01:00:00Z");
+        assert_eq!(s.total_input_tokens, 0);
+        assert_eq!(s.total_output_tokens, 0);
+        assert!(s.models.is_empty());
+        std::fs::remove_dir_all(&tmp).ok();
     }
 
     #[test]

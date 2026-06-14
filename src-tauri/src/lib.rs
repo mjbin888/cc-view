@@ -7,6 +7,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::ports::list_ports,
             commands::ports::kill_port,
+            commands::conversations::list_sessions,
+            commands::conversations::read_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
