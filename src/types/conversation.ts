@@ -1,6 +1,7 @@
 // src/types/conversation.ts
 export type Block =
   | { kind: "thinking"; text: string }
+  | { kind: "redacted_thinking" }
   | { kind: "text"; text: string }
   | { kind: "tool_use"; id: string; name: string; input: unknown }
   | { kind: "tool_result"; toolUseId: string; content: unknown }
@@ -15,6 +16,8 @@ export interface Usage {
 
 export interface NormEvent {
   uuid: string;
+  parentUuid?: string;
+  isSidechain?: boolean;
   role: "user" | "assistant" | "system";
   timestamp: string;
   blocks: Block[];

@@ -8,9 +8,11 @@ const singlePortGroup: PortGroup = {
   pid: 42,
   processName: "node",
   exePath: "/usr/bin/node",
+  cwd: "/Users/foo/myproject",
+  cmd: "node vite.js",
   isUserProcess: true,
   entries: [
-    { port: 3000, protocol: "TCP", pid: 42, processName: "node", exePath: "/usr/bin/node", isUserProcess: true, state: "LISTEN" },
+    { port: 3000, protocol: "TCP", pid: 42, processName: "node", exePath: "/usr/bin/node", cwd: "/Users/foo/myproject", cmd: "node vite.js", isUserProcess: true, state: "LISTEN", runTimeSecs: 120 },
   ],
 };
 
@@ -18,19 +20,45 @@ const multiPortGroup: PortGroup = {
   pid: 1229,
   processName: "ControlCenter",
   exePath: "/System/CC",
+  cwd: "/System",
+  cmd: "ControlCenter",
   isUserProcess: false,
   entries: [
-    { port: 5000, protocol: "TCP", pid: 1229, processName: "ControlCenter", exePath: "/System/CC", isUserProcess: false, state: "LISTEN" },
-    { port: 7000, protocol: "TCP", pid: 1229, processName: "ControlCenter", exePath: "/System/CC", isUserProcess: false, state: "LISTEN" },
+    { port: 5000, protocol: "TCP", pid: 1229, processName: "ControlCenter", exePath: "/System/CC", cwd: "/System", cmd: "ControlCenter", isUserProcess: false, state: "LISTEN", runTimeSecs: 7200 },
+    { port: 7000, protocol: "TCP", pid: 1229, processName: "ControlCenter", exePath: "/System/CC", cwd: "/System", cmd: "ControlCenter", isUserProcess: false, state: "LISTEN", runTimeSecs: 7200 },
   ],
 };
 
 describe("PortTable", () => {
-  it("renders a single-port group as a normal row with path", () => {
+  it("renders a single-port group showing cwd as path", () => {
     render(<PortTable groups={[singlePortGroup]} onKill={vi.fn()} />);
     expect(screen.getByText("3000")).toBeInTheDocument();
     expect(screen.getByText("node")).toBeInTheDocument();
+    expect(screen.getByText("/Users/foo/myproject")).toBeInTheDocument();
+  });
+
+  it("falls back to exePath when cwd is empty", () => {
+    const group: PortGroup = {
+      ...singlePortGroup,
+      cwd: "",
+      entries: [{ ...singlePortGroup.entries[0], cwd: "" }],
+    };
+    render(<PortTable groups={[group]} onKill={vi.fn()} />);
     expect(screen.getByText("/usr/bin/node")).toBeInTheDocument();
+  });
+
+  it("renders duration column for single-port group", () => {
+    render(<PortTable groups={[singlePortGroup]} onKill={vi.fn()} />);
+    expect(screen.getByText("2m")).toBeInTheDocument();
+  });
+
+  it("shows — for runTimeSecs === 0", () => {
+    const group: PortGroup = {
+      ...singlePortGroup,
+      entries: [{ ...singlePortGroup.entries[0], runTimeSecs: 0 }],
+    };
+    render(<PortTable groups={[group]} onKill={vi.fn()} />);
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("shows default empty state when no groups", () => {

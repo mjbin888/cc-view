@@ -5,6 +5,9 @@ export interface PortEntry {
   pid: number;
   processName: string;
   exePath: string;
+  cwd: string;
+  cmd: string;
   isUserProcess: boolean;
   state: string;
+  runTimeSecs: number;
 }

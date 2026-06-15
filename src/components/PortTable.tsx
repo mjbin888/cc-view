@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PortEntry } from "../types/port";
 import { PortGroup } from "../lib/groupPorts";
+import { formatDuration } from "../lib/formatDuration";
 
 interface PortTableProps {
   groups: PortGroup[];
@@ -29,13 +30,14 @@ function StateBadge({ state }: { state: string }) {
   );
 }
 
-function PathCell({ exePath }: { exePath: string }) {
+function PathCell({ cwd, exePath, cmd }: { cwd: string; exePath: string; cmd: string }) {
+  const display = cwd || exePath || "—";
   return (
     <span
       className="block truncate max-w-[260px] text-muted-foreground"
-      title={exePath}
+      title={cmd || display}
     >
-      {exePath || "—"}
+      {display}
     </span>
   );
 }
@@ -72,6 +74,7 @@ export function PortTable({ groups, onKill, emptyMessage }: PortTableProps) {
           <TableHead className="w-20">协议</TableHead>
           <TableHead>进程名</TableHead>
           <TableHead>路径</TableHead>
+          <TableHead className="w-24">时长</TableHead>
           <TableHead className="w-24">PID</TableHead>
           <TableHead className="w-32">状态</TableHead>
           <TableHead className="w-20">操作</TableHead>
@@ -89,7 +92,10 @@ export function PortTable({ groups, onKill, emptyMessage }: PortTableProps) {
                 </TableCell>
                 <TableCell className="font-mono">{entry.processName}</TableCell>
                 <TableCell className="font-mono text-xs">
-                  <PathCell exePath={entry.exePath} />
+                  <PathCell cwd={entry.cwd} exePath={entry.exePath} cmd={entry.cmd} />
+                </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {entry.runTimeSecs > 0 ? formatDuration(entry.runTimeSecs) : "—"}
                 </TableCell>
                 <TableCell className="font-mono text-muted-foreground">{entry.pid}</TableCell>
                 <TableCell>
@@ -133,8 +139,9 @@ export function PortTable({ groups, onKill, emptyMessage }: PortTableProps) {
                 </TableCell>
                 <TableCell className="font-mono">{group.processName}</TableCell>
                 <TableCell className="font-mono text-xs">
-                  <PathCell exePath={group.exePath} />
+                  <PathCell cwd={group.cwd} exePath={group.exePath} cmd={group.cmd} />
                 </TableCell>
+                <TableCell />
                 <TableCell className="font-mono text-muted-foreground">{group.pid}</TableCell>
                 <TableCell />
                 <TableCell />
@@ -148,6 +155,9 @@ export function PortTable({ groups, onKill, emptyMessage }: PortTableProps) {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">↳</TableCell>
                     <TableCell />
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {entry.runTimeSecs > 0 ? formatDuration(entry.runTimeSecs) : "—"}
+                    </TableCell>
                     <TableCell />
                     <TableCell>
                       <StateBadge state={entry.state} />

@@ -40,7 +40,7 @@ export function PortsView() {
   }
 
   return (
-    <div className="w-full p-6">
+    <div className="h-full w-full overflow-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">本地端口管理</h1>
         <RefreshBar

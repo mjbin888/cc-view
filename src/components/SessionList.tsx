@@ -2,6 +2,7 @@
 import { SessionSummary } from "../types/conversation";
 import { groupSessionsByProject } from "../lib/groupSessionsByProject";
 import { filterSessions } from "../lib/filterSessions";
+import { formatTimestamp } from "../lib/formatTimestamp";
 import { Input } from "@/components/ui/input";
 
 interface Props {
@@ -36,13 +37,16 @@ export function SessionList({ sessions, selectedId, onSelect, query, onQueryChan
                 <button
                   key={s.id}
                   onClick={() => onSelect(s.id)}
-                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-accent ${
-                    selectedId === s.id ? "bg-accent" : ""
+                  aria-current={selectedId === s.id}
+                  className={`block w-full border-l-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${
+                    selectedId === s.id
+                      ? "border-primary bg-accent font-medium text-foreground"
+                      : "border-transparent"
                   }`}
                 >
                   <div className="truncate">{s.title}</div>
                   <div className="text-xs text-muted-foreground">
-                    {s.messageCount} msgs · {s.lastActivityAt}
+                    {s.messageCount} msgs · {formatTimestamp(s.lastActivityAt)}
                   </div>
                 </button>
               ))}

@@ -1,4 +1,5 @@
 mod commands;
+pub mod snapshot;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -9,6 +10,7 @@ pub fn run() {
             commands::ports::kill_port,
             commands::conversations::list_sessions,
             commands::conversations::read_session,
+            commands::usage::read_usage_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

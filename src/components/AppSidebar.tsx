@@ -1,4 +1,5 @@
 import { Network, MessagesSquare } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 
 export type ViewKey = "ports" | "conversations";
 
@@ -20,14 +21,19 @@ export function AppSidebar({
         <button
           key={key}
           onClick={() => onChange(key)}
-          className={`flex w-16 flex-col items-center gap-1 rounded-md py-2 text-xs ${
-            view === key ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent/50"
+          className={`flex w-16 flex-col items-center gap-1 rounded-md py-2 text-xs transition-colors ${
+            view === key
+              ? "bg-primary/10 font-medium text-primary"
+              : "text-muted-foreground hover:bg-accent/50"
           }`}
         >
           <Icon className="h-5 w-5" />
           {label}
         </button>
       ))}
+      <div className="mt-auto w-16 px-0.5">
+        <ThemeToggle />
+      </div>
     </nav>
   );
 }

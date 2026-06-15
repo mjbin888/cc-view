@@ -11,9 +11,13 @@ pub struct PortEntry {
     pub process_name: String,
     #[serde(rename = "exePath")]
     pub exe_path: String,
+    pub cwd: String,
+    pub cmd: String,
     #[serde(rename = "isUserProcess")]
     pub is_user_process: bool,
     pub state: String,
+    #[serde(rename = "runTimeSecs")]
+    pub run_time_secs: u64,
 }
 
 pub fn get_ports_internal() -> Result<Vec<PortEntry>, String> {
@@ -71,6 +75,23 @@ pub fn get_ports_internal() -> Result<Vec<PortEntry>, String> {
             .map(|path| path.to_string_lossy().into_owned())
             .unwrap_or_default();
 
+        let cwd = process
+            .and_then(|p| p.cwd())
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
+
+        let cmd = process
+            .map(|p| {
+                p.cmd()
+                    .iter()
+                    .map(|s| s.to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .unwrap_or_default();
+
+        let run_time_secs = process.map(|p| p.run_time()).unwrap_or(0);
+
         let is_user_process = match (&current_uid, process.and_then(|p| p.user_id())) {
             (Some(cur), Some(uid)) => cur == uid,
             _ => false,
@@ -82,8 +103,11 @@ pub fn get_ports_internal() -> Result<Vec<PortEntry>, String> {
             pid,
             process_name,
             exe_path,
+            cwd,
+            cmd,
             is_user_process,
             state,
+            run_time_secs,
         });
     }
 
@@ -173,11 +197,12 @@ mod tests {
 
     #[test]
     fn test_entries_carry_new_fields() {
-        // Field access proves the struct shape; the assert proves the pipeline
-        // actually populated each entry rather than returning empties.
         let entries = get_ports_internal().unwrap();
         for e in &entries {
             let _ = &e.exe_path;
+            let _ = &e.cwd;
+            let _ = &e.cmd;
+            let _ = e.run_time_secs;
             let _ = e.is_user_process;
             assert!(!e.process_name.is_empty(), "process_name should never be empty");
         }

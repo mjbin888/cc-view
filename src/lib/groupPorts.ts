@@ -5,6 +5,8 @@ export interface PortGroup {
   pid: number;
   processName: string;
   exePath: string;
+  cwd: string;
+  cmd: string;
   isUserProcess: boolean;
   entries: PortEntry[];
 }
@@ -20,6 +22,8 @@ export function groupPorts(entries: PortEntry[]): PortGroup[] {
         pid: e.pid,
         processName: e.processName,
         exePath: e.exePath,
+        cwd: e.cwd,
+        cmd: e.cmd,
         isUserProcess: e.isUserProcess,
         entries: [e],
       });

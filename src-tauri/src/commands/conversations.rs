@@ -7,6 +7,8 @@ use std::path::Path;
 pub enum Block {
     #[serde(rename = "thinking")]
     Thinking { text: String },
+    #[serde(rename = "redacted_thinking")]
+    RedactedThinking,
     #[serde(rename = "text")]
     Text { text: String },
     #[serde(rename = "tool_use")]
@@ -36,6 +38,10 @@ pub struct Usage {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct NormEvent {
     pub uuid: String,
+    #[serde(rename = "parentUuid", skip_serializing_if = "Option::is_none")]
+    pub parent_uuid: Option<String>,
+    #[serde(rename = "isSidechain", default)]
+    pub is_sidechain: bool,
     pub role: String,
     pub timestamp: String,
     pub blocks: Vec<Block>,
@@ -77,6 +83,7 @@ fn parse_block(b: &Value) -> Option<Block> {
         "thinking" => Some(Block::Thinking {
             text: b.get("thinking").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
+        "redacted_thinking" => Some(Block::RedactedThinking),
         "text" => Some(Block::Text {
             text: b.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }),
@@ -135,6 +142,11 @@ pub fn parse_event(line: &str) -> Option<NormEvent> {
 
     Some(NormEvent {
         uuid: v.get("uuid").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        parent_uuid: v
+            .get("parentUuid")
+            .and_then(|x| x.as_str())
+            .map(|s| s.to_string()),
+        is_sidechain: v.get("isSidechain").and_then(|x| x.as_bool()).unwrap_or(false),
         role,
         timestamp: v.get("timestamp").and_then(|x| x.as_str()).unwrap_or("").to_string(),
         blocks,
@@ -300,14 +312,54 @@ impl TranscriptSource for ClaudeCodeSource {
     }
 }
 
+/// 按 id 前缀判定来源：codex: / opencode: / 其余归 claude-code。
+pub fn classify(id: &str) -> &'static str {
+    if id.starts_with("codex:") {
+        "codex"
+    } else if id.starts_with("opencode:") {
+        "opencode"
+    } else {
+        "claude-code"
+    }
+}
+
+/// 聚合全部来源，单源失败降级为空列表（不让一个源拖垮整体）。
 #[tauri::command]
 pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
-    ClaudeCodeSource.list_sessions()
+    use super::codex::CodexSource;
+    use super::opencode::OpenCodeSource;
+
+    let mut out: Vec<SessionSummary> = Vec::new();
+    out.extend(ClaudeCodeSource.list_sessions().unwrap_or_default());
+    out.extend(CodexSource.list_sessions().unwrap_or_default());
+    out.extend(OpenCodeSource.list_sessions().unwrap_or_default());
+    out.sort_by(|a, b| b.last_activity_at.cmp(&a.last_activity_at));
+    Ok(out)
 }
 
 #[tauri::command]
 pub fn read_session(id: String) -> Result<SessionDetail, String> {
-    ClaudeCodeSource.read_session(&id)
+    use super::codex::CodexSource;
+    use super::opencode::OpenCodeSource;
+
+    match classify(&id) {
+        "codex" => CodexSource.read_session(&id),
+        "opencode" => OpenCodeSource.read_session(&id),
+        _ => ClaudeCodeSource.read_session(&id),
+    }
+}
+
+#[cfg(test)]
+mod dispatch_tests {
+    use super::classify;
+
+    #[test]
+    fn classify_routes_by_prefix() {
+        assert_eq!(classify("codex:abc"), "codex");
+        assert_eq!(classify("opencode:ses_1"), "opencode");
+        assert_eq!(classify("claude-code:xyz"), "claude-code");
+        assert_eq!(classify("bare-id"), "claude-code");
+    }
 }
 
 #[cfg(test)]
@@ -333,11 +385,33 @@ mod tests {
 
     #[test]
     fn parse_user_string_content_becomes_text_block() {
-        let line = r#"{"type":"user","uuid":"u2","timestamp":"2026-06-14T00:00:01Z","message":{"role":"user","content":"hello"}}"#;
+        let line = r#"{"type":"user","uuid":"u2","parentUuid":"u1","timestamp":"2026-06-14T00:00:01Z","message":{"role":"user","content":"hello"}}"#;
         let ev = parse_event(line).expect("should parse");
         assert_eq!(ev.role, "user");
+        assert_eq!(ev.parent_uuid.as_deref(), Some("u1"));
+        assert!(!ev.is_sidechain);
         assert_eq!(ev.blocks, vec![Block::Text { text: "hello".into() }]);
         assert!(ev.usage.is_none());
+    }
+
+    #[test]
+    fn parse_event_captures_sidechain_and_null_parent() {
+        let root = r#"{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-06-14T00:00:00Z","message":{"role":"user","content":"hi"}}"#;
+        let ev = parse_event(root).expect("should parse");
+        assert_eq!(ev.parent_uuid, None);
+        assert!(!ev.is_sidechain);
+
+        let side = r#"{"type":"assistant","uuid":"s1","parentUuid":"u1","isSidechain":true,"timestamp":"2026-06-14T00:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"sub"}]}}"#;
+        let ev = parse_event(side).expect("should parse");
+        assert_eq!(ev.parent_uuid.as_deref(), Some("u1"));
+        assert!(ev.is_sidechain);
+    }
+
+    #[test]
+    fn parse_redacted_thinking_block() {
+        let line = r#"{"type":"assistant","uuid":"r1","timestamp":"2026-06-14T00:00:00Z","message":{"role":"assistant","content":[{"type":"redacted_thinking","data":"encrypted"}]}}"#;
+        let ev = parse_event(line).expect("should parse");
+        assert_eq!(ev.blocks, vec![Block::RedactedThinking]);
     }
 
     #[test]

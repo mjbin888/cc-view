@@ -8,6 +8,8 @@ export function filterPorts(entries: PortEntry[], query: string): PortEntry[] {
     (e) =>
       String(e.port).includes(q) ||
       e.processName.toLowerCase().includes(q) ||
-      e.exePath.toLowerCase().includes(q)
+      e.exePath.toLowerCase().includes(q) ||
+      e.cwd.toLowerCase().includes(q) ||
+      e.cmd.toLowerCase().includes(q)
   );
 }
